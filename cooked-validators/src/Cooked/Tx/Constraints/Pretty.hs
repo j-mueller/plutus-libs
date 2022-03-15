@@ -66,6 +66,7 @@ prettyConstraint (Mints mr policies val) =
         Just $ "Policies:" <+> PP.list (map prettyMintingPolicy policies)
       ]
 prettyConstraint (SignedBy pkhs) = prettyEnum "SignedBy" "-" $ prettyWallet <$> pkhs
+prettyConstraint (ValidateIn tr) = "ValidatesIn" <+> PP.viaShow tr
 prettyConstraint _ = "<constraint without pretty def>"
 
 prettyHash :: (Show a) => a -> Doc ann
