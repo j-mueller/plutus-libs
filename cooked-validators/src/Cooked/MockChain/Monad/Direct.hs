@@ -334,7 +334,7 @@ generateTx' skel@(TxSkel _ _ constraintsSpec) = do
               then applyTxOutConstraintOrder outputConstraints ubtx
               else ubtx
       signers <- askSigners
-      balancedTx <- balanceTxFrom (not $ balance opts) (NE.head signers) (adjust reorderedUbtx)
+      balancedTx <- balanceTxFrom (adjustOutputPol opts) (not $ balance opts) (NE.head signers) (adjust reorderedUbtx)
       return $
         foldl
           (flip txAddSignature)
@@ -367,14 +367,14 @@ setFeeAndValidRange (Pl.UnbalancedTx tx0 _reqSigs _uindex slotRange) = do
   return
     tx {Pl.txValidRange = Pl.posixTimeRangeToContainedSlotRange config slotRange}
 
-balanceTxFrom :: (Monad m) => Bool -> Wallet -> Pl.UnbalancedTx -> MockChainT m Pl.Tx
-balanceTxFrom skipBalancing w ubtx = do
+balanceTxFrom :: (Monad m) => AdjustOutputPolicy -> Bool -> Wallet -> Pl.UnbalancedTx -> MockChainT m Pl.Tx
+balanceTxFrom p skipBalancing w ubtx = do
   tx <- setFeeAndValidRange ubtx
   if skipBalancing
     then return tx
     else do
       bres <- calcBalanceTx w tx
-      case applyBalanceTx w bres tx of
+      case applyBalanceTx p w bres tx of
         Just tx' -> return tx'
         Nothing -> throwError $ MCEUnbalanceable tx bres
 
@@ -418,8 +418,12 @@ calcBalanceTx w tx = do
 -- with "LessThanMinAdaPerUTxO" error. Instead, we need to consume yet another UTxO belonging to @w@ to
 -- then create the output with the proper leftover. If @w@ has no UTxO, then there's no
 -- way to balance this transaction.
-applyBalanceTx :: Wallet -> BalanceTxRes -> Pl.Tx -> Maybe Pl.Tx
-applyBalanceTx w (BalanceTxRes newTxIns leftover remainders) tx = do
+applyBalanceTx :: AdjustOutputPolicy -> Wallet -> BalanceTxRes -> Pl.Tx -> Maybe Pl.Tx
+applyBalanceTx p w (BalanceTxRes newTxIns leftover remainders) tx = do
+  let adjustOutputs = case p of
+        DontAdjustExistingOutput -> empty
+        AdjustExistingOutput -> wOutsBest >>= fmap ([],) . adjustOutputValueAt (<> leftover) (Pl.txOutputs tx)
+
   -- Here we'll try a few things, in order, until one of them succeeds:
   --   1. pick out the best possible output to adjust and adjust it as long as it remains with
   --      more than 'Pl.minAdaTxOut'. No need for additional inputs.
@@ -429,8 +433,8 @@ applyBalanceTx w (BalanceTxRes newTxIns leftover remainders) tx = do
   --      and return the leftover.
   (txInsDelta, txOuts') <-
     asum $
-      [ guard (isAtLeastMinAda leftover) >> return ([], Pl.txOutputs tx ++ [mkOutWithVal leftover]), -- 2.
-        wOutsBest >>= fmap ([],) . adjustOutputValueAt (<> leftover) (Pl.txOutputs tx) -- 1.
+      [ adjustOutputs, -- 1.
+        guard (isAtLeastMinAda leftover) >> return ([], Pl.txOutputs tx ++ [mkOutWithVal leftover]) -- 2.
       ]
         ++ map (fmap (second (Pl.txOutputs tx ++)) . consumeRemainder) (sortByMoreAda remainders) -- 3.
   let newTxIns' = S.fromList $ map (`Pl.TxIn` Just Pl.ConsumePublicKeyAddress) (newTxIns ++ txInsDelta)
