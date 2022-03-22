@@ -429,8 +429,8 @@ applyBalanceTx w (BalanceTxRes newTxIns leftover remainders) tx = do
   --      and return the leftover.
   (txInsDelta, txOuts') <-
     asum $
-      [ wOutsBest >>= fmap ([],) . adjustOutputValueAt (<> leftover) (Pl.txOutputs tx), -- 1.
-        guard (isAtLeastMinAda leftover) >> return ([], Pl.txOutputs tx ++ [mkOutWithVal leftover]) -- 2.
+      [ guard (isAtLeastMinAda leftover) >> return ([], Pl.txOutputs tx ++ [mkOutWithVal leftover]), -- 2.
+        wOutsBest >>= fmap ([],) . adjustOutputValueAt (<> leftover) (Pl.txOutputs tx) -- 1.
       ]
         ++ map (fmap (second (Pl.txOutputs tx ++)) . consumeRemainder) (sortByMoreAda remainders) -- 3.
   let newTxIns' = S.fromList $ map (`Pl.TxIn` Just Pl.ConsumePublicKeyAddress) (newTxIns ++ txInsDelta)
