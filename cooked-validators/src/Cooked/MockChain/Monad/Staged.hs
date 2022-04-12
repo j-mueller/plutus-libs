@@ -64,7 +64,7 @@ interpret = mapMockChainT (mapWriterT $ flip evalStateT []) . interpretNonDet
 --  On top of the operations from 'MonadBlockChain' we also have 'Fail' to make
 --  sure the resulting monad will be an instance of 'MonadFail'.
 data MockChainOp a where
-  ValidateTxSkel :: TxSkel -> MockChainOp Pl.TxId
+  ValidateTxSkel :: TxSkel -> MockChainOp Pl.CardanoTx
   TxOutByRef :: Pl.TxOutRef -> MockChainOp (Maybe Pl.TxOut)
   GetCurrentSlot :: MockChainOp Pl.Slot
   AwaitSlot :: Pl.Slot -> MockChainOp Pl.Slot
