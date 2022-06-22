@@ -20,6 +20,7 @@ import Cooked.MockChain.UtxoState
 import Cooked.MockChain.Wallet
 import Cooked.Tx.Constraints
 import qualified Data.List.NonEmpty as NE
+import Data.Typeable (Typeable)
 import qualified Ledger as Pl
 import qualified Ledger.TimeSlot as Pl
 import qualified PlutusTx as Pl (FromData)
@@ -68,7 +69,7 @@ data MockChainBuiltin a where
   GetCurrentTime :: MockChainBuiltin Pl.POSIXTime
   AwaitTime :: Pl.POSIXTime -> MockChainBuiltin Pl.POSIXTime
   UtxosSuchThat ::
-    (Pl.FromData a) =>
+    (Pl.FromData a, Typeable a) =>
     Pl.Address ->
     (Maybe a -> Pl.Value -> Bool) ->
     MockChainBuiltin [(SpendableOut, Maybe a)]

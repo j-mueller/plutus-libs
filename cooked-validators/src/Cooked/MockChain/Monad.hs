@@ -23,6 +23,7 @@ import Cooked.Tx.Constraints
 import Data.Kind
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (fromJust)
+import Data.Typeable (Typeable)
 import qualified Ledger as Pl
 import qualified Ledger.Credential as Pl
 import qualified Ledger.TimeSlot as Pl
@@ -57,7 +58,7 @@ class (MonadFail m) => MonadBlockChain m where
   --  Additionally, return the datum present in there if it happened to be a script output. It is important
   --  to use @-XTypeApplications@ and pass a value for type variable @a@ below.
   utxosSuchThat ::
-    (Pl.FromData a) =>
+    (Pl.FromData a, Typeable a) =>
     Pl.Address ->
     UtxoPredicate a ->
     m [(SpendableOut, Maybe a)]
@@ -110,7 +111,7 @@ spendableRef txORef = do
 -- you must use 'utxosSuchThat' directly.
 pkUtxosSuchThat ::
   forall a m.
-  (MonadBlockChain m, Pl.FromData a) =>
+  (MonadBlockChain m, Pl.FromData a, Typeable a) =>
   Pl.PubKeyHash ->
   UtxoPredicate a ->
   m [(SpendableOut, Maybe a)]
@@ -130,7 +131,7 @@ pkUtxosSuchThatValue pkh predi =
 --  a simpler variant of 'utxosSuchThat'. It is important to pass a value for type variable @a@
 --  with an explicit type application to make sure the conversion to and from 'Pl.Datum' happens correctly.
 scriptUtxosSuchThat ::
-  (MonadBlockChain m, Pl.FromData (Pl.DatumType tv)) =>
+  (MonadBlockChain m, Pl.FromData (Pl.DatumType tv), Typeable (Pl.DatumType tv)) =>
   Pl.TypedValidator tv ->
   -- | Slightly different from 'UtxoPredicate': here we're guaranteed to have a datum present.
   (Pl.DatumType tv -> Pl.Value -> Bool) ->

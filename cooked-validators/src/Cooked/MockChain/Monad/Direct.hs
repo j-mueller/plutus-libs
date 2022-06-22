@@ -31,7 +31,9 @@ import qualified Data.List as L
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as M
 import Data.Maybe (catMaybes, mapMaybe)
+import Data.Proxy (Proxy(..))
 import qualified Data.Set as S
+import Data.Typeable (Typeable, typeRep)
 import Data.Void
 import qualified Ledger as Pl
 import qualified Ledger.Ada as Pl
@@ -327,7 +329,7 @@ validateTx' reqSigs tx = do
 -- | Check 'utxosSuchThat' for details
 utxosSuchThat' ::
   forall a m.
-  (Monad m, Pl.FromData a) =>
+  (Monad m, Pl.FromData a, Typeable a) =>
   Pl.Address ->
   (Maybe a -> Pl.Value -> Bool) ->
   MockChainT m [(SpendableOut, Maybe a)]
@@ -356,9 +358,10 @@ utxosSuchThat' addr datumPred = do
         Pl.ScriptCredential (Pl.ValidatorHash vh) -> do
           datumH <- maybe (fail $ "ScriptCredential with no datum hash: " ++ show oref) return mdatumH
           datum <- maybe (fail $ "Unmanaged datum with hash: " ++ show datumH ++ " at: " ++ show oref) return mdatum
+          let tp = show $ typeRep $ Proxy @a
           a <-
             maybe
-              (fail $ "Can't convert from builtin data at: " ++ show oref ++ "; are you sure this is the right type?")
+              (fail $ "Can't convert to " ++ tp ++ " from builtin data at: " ++ show oref ++ "; are you sure this is the right type?")
               return
               (Pl.fromBuiltinData (Pl.getDatum datum))
           if datumPred (Just a) val
