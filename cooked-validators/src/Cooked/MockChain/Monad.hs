@@ -53,6 +53,9 @@ class (MonadFail m) => MonadBlockChain m where
   --  The 'TxSkel' receives a 'TxOpts' record with a number of options to customize how validation works.
   validateTxSkel :: TxSkel -> m Pl.CardanoTx
 
+  -- | Validate a transaction
+  validateTx :: Pl.CardanoTx -> m Pl.TxId
+
   -- | Returns a list of spendable outputs that belong to a given address and satisfy a given predicate;
   --  Additionally, return the datum present in there if it happened to be a script output. It is important
   --  to use @-XTypeApplications@ and pass a value for type variable @a@ below.
@@ -243,6 +246,7 @@ newtype AsTrans t (m :: Type -> Type) a = AsTrans {getTrans :: t m a}
 
 instance (MonadTrans t, MonadBlockChain m, MonadFail (t m)) => MonadBlockChain (AsTrans t m) where
   validateTxSkel = lift . validateTxSkel
+  validateTx = lift . validateTx
   utxosSuchThat addr f = lift $ utxosSuchThat addr f
   ownPaymentPubKeyHash = lift ownPaymentPubKeyHash
   txOutByRef = lift . txOutByRef

@@ -64,6 +64,7 @@ interpret = flip evalStateT [] . interpLtlAndPruneUnfinished
 
 data MockChainBuiltin a where
   ValidateTxSkel :: TxSkel -> MockChainBuiltin Pl.CardanoTx
+  ValidateTx :: Pl.CardanoTx -> MockChainBuiltin Pl.TxId
   TxOutByRef :: Pl.TxOutRef -> MockChainBuiltin (Maybe Pl.TxOut)
   GetCurrentSlot :: MockChainBuiltin Pl.Slot
   AwaitSlot :: Pl.Slot -> MockChainBuiltin Pl.Slot
@@ -138,6 +139,7 @@ instance InterpLtl Attack MockChainBuiltin InterpMockChain where
                 return tx
             )
             (now mockSt skel)
+  interpBuiltin (ValidateTx tx) = validateTx tx
   interpBuiltin (SigningWith ws act) = signingWith ws (interpLtl act)
   interpBuiltin (TxOutByRef o) = txOutByRef o
   interpBuiltin GetCurrentSlot = currentSlot
@@ -168,6 +170,7 @@ singletonBuiltin b = Instr (Builtin b) Return
 
 instance MonadBlockChain StagedMockChain where
   validateTxSkel = singletonBuiltin . ValidateTxSkel
+  validateTx = singletonBuiltin . ValidateTx
   utxosSuchThat a p = singletonBuiltin (UtxosSuchThat a p)
   txOutByRef = singletonBuiltin . TxOutByRef
   ownPaymentPubKeyHash = singletonBuiltin OwnPubKey

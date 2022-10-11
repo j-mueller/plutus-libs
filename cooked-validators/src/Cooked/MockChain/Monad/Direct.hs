@@ -38,13 +38,14 @@ import qualified Ledger.Ada as Ada
 import qualified Ledger.Constraints as Pl
 import qualified Ledger.Credential as Pl
 import qualified Ledger.Fee as Pl
-import Ledger.Orphans ()
+import Ledger.Orphans () 
 import qualified Ledger.TimeSlot as Pl
 import qualified Ledger.Validation as Pl
 import qualified Ledger.Value as Pl
 import qualified PlutusTx as Pl
 import qualified PlutusTx.Lattice as PlutusTx
 import qualified PlutusTx.Numeric as Pl
+import qualified Wallet.Emulator.Chain as Em
 
 -- * Direct Emulation
 
@@ -225,10 +226,12 @@ utxoIndex0 = utxoIndex0From def
 
 instance (Monad m) => MonadBlockChain (MockChainT m) where
   validateTxSkel skel = do
-    (reqSigs, tx) <- generateTx' skel
-    _ <- validateTx' reqSigs tx
+    tx <- Pl.EmulatorTx <$> generateTx' skel
+    _ <- validateTx tx
     when (autoSlotIncrease $ txOpts skel) $ modify' (\st -> st {mcstCurrentSlot = mcstCurrentSlot st + 1})
-    return (Pl.EmulatorTx tx)
+    return tx
+
+  validateTx = validateTx'
 
   txOutByRef outref = gets (M.lookup outref . Pl.getIndex . mcstIndex)
 
@@ -311,14 +314,14 @@ runTransactionValidation s parms ix reqSigners signers tx =
 
 -- | Check 'validateTx' for details; we pass the list of required signatories since
 -- that is only truly available from the unbalanced tx, so we bubble that up all the way here.
-validateTx' :: (Monad m) => [Pl.PaymentPubKeyHash] -> Pl.Tx -> MockChainT m Pl.TxId
-validateTx' reqSigs tx = do
+validateTx' :: (Monad m) => Pl.CardanoTx -> MockChainT m Pl.TxId
+validateTx' tx = do
   s <- currentSlot
   ix <- gets mcstIndex
   ps <- asks mceParams
-  signers <- askSigners
-  let (ix', status, _evs) = runTransactionValidation s ps ix reqSigs (NE.toList signers) tx
-  -- case trace (show $ snd res) $ fst res of
+  let cUtxoIndex = either (error . show) id $ Pl.fromPlutusIndex ps ix
+      ctx = Pl.ValidationCtx ix ps
+      ((status, _evs), Pl.ValidationCtx ix' _) = runState (Em.validateEm s cUtxoIndex tx) ctx
   case status of
     Just err -> throwError (MCEValidationError err)
     Nothing -> do
@@ -326,17 +329,17 @@ validateTx' reqSigs tx = do
       -- The new mcstIndex is just `ix'`; the new mcstDatums is computed by
       -- removing the datum hashes have been consumed and adding
       -- those that have been created in `tx`.
-      let consumedIns = map Pl.txInRef $ Pl.txInputs tx ++ Pl.txCollateral tx
+      let consumedIns = map Pl.txInRef $ Pl.getCardanoTxInputs tx ++ Pl.getCardanoTxCollateralInputs tx
       consumedDHs <- catMaybes <$> mapM (fmap Pl.txOutDatumHash . outFromOutRef) consumedIns
       let consumedDHs' = M.fromList $ zip consumedDHs (repeat ())
       modify'
         ( \st ->
             st
               { mcstIndex = ix',
-                mcstDatums = (mcstDatums st `M.difference` consumedDHs') `M.union` Pl.txData tx
+                mcstDatums = (mcstDatums st `M.difference` consumedDHs') `M.union` Pl.getCardanoTxData tx
               }
         )
-      return $ Pl.txId tx
+      return $ Pl.getCardanoTxId tx
 
 -- | Check 'utxosSuchThat' for details
 utxosSuchThat' ::
@@ -398,7 +401,7 @@ myAdjustUnbalTx parms utx =
     Right (_, res) -> res
 
 -- | Check 'generateTx' for details
-generateTx' :: (Monad m) => TxSkel -> MockChainT m ([Pl.PaymentPubKeyHash], Pl.Tx)
+generateTx' :: (Monad m) => TxSkel -> MockChainT m Pl.Tx
 generateTx' skel@(TxSkel _ _ constraintsSpec) = do
   modify $ updateDatumStr skel
   signers <- askSigners
@@ -415,8 +418,8 @@ generateTx' skel@(TxSkel _ _ constraintsSpec) = do
               else ubtx
       -- optionally apply a transformation before balancing
       let modifiedUbtx = applyRawModOnUnbalancedTx (unsafeModTx opts) reorderedUbtx
-      (reqSigs, balancedTx) <- balanceTxFrom (balanceOutputPolicy opts) (not $ balance opts) (collateral opts) (NE.head signers) (adjust modifiedUbtx)
-      return . (reqSigs,) $
+      (_, balancedTx) <- balanceTxFrom (balanceOutputPolicy opts) (not $ balance opts) (collateral opts) (NE.head signers) (adjust modifiedUbtx)
+      return $
         foldl
           (flip txAddSignature)
           -- optionally apply a transformation to a balanced tx before sending it in.
