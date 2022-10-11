@@ -28,6 +28,10 @@ instance (C.AsContractError e) => MonadBlockChain (C.Contract w s e) where
     when (awaitTxConfirmed txOpts) $ C.awaitTxConfirmed $ Pl.getCardanoTxId tx
     return tx
 
+  validateTx _lparams tx = do
+    _ <- C.submitBalancedTx tx
+    pure (Pl.getCardanoTxId tx)
+
   utxosSuchThat addr datumPred = do
     allUtxos <- M.toList <$> C.utxosAt addr
     maybeUtxosWithDatums <- forM allUtxos $ \utxo -> do

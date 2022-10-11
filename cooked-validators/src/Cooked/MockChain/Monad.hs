@@ -56,6 +56,9 @@ class (MonadFail m) => MonadBlockChain m where
   --  without now internally keeps cardano api TxOut.
   validateTxSkel :: Pl.Params -> TxSkel -> m Pl.CardanoTx
 
+  -- | Validate a transaction
+  validateTx :: Pl.Params -> Pl.CardanoTx -> m Pl.TxId
+
   -- | Returns a list of spendable outputs that belong to a given address and satisfy a given predicate;
   --  Additionally, return the datum present in there if it happened to be a script output. It is important
   --  to use @-XTypeApplications@ and pass a value for type variable @a@ below.
@@ -287,6 +290,7 @@ newtype AsTrans t (m :: Type -> Type) a = AsTrans {getTrans :: t m a}
 
 instance (MonadTrans t, MonadBlockChain m, MonadFail (t m)) => MonadBlockChain (AsTrans t m) where
   validateTxSkel lparams skel = lift $ validateTxSkel lparams skel
+  validateTx lparams tx = lift $ validateTx lparams tx
   utxosSuchThat addr f = lift $ utxosSuchThat addr f
   datumFromTxOut = lift . datumFromTxOut
   ownPaymentPubKeyHash = lift ownPaymentPubKeyHash

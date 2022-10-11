@@ -42,7 +42,7 @@ import qualified Ledger.Constraints as Pl
 import qualified Ledger.Constraints.OffChain as Pl
 import qualified Ledger.Credential as Pl
 import qualified Ledger.Fee as Pl
-import Ledger.Orphans ()
+import Ledger.Orphans () 
 import qualified Ledger.TimeSlot as Pl
 import qualified Ledger.Tx.CardanoAPI.Internal as Pl
 import qualified Ledger.Validation as Pl
@@ -52,6 +52,7 @@ import qualified PlutusTx as Pl
 import qualified PlutusTx.Lattice as PlutusTx
 import qualified PlutusTx.Numeric as Pl
 import qualified PlutusTx.Ratio as R
+import qualified Wallet.Emulator.Chain as Em
 
 -- * Direct Emulation
 
@@ -231,11 +232,13 @@ utxoIndex0 lparams = utxoIndex0From lparams def
 -- ** Direct Interpretation of Operations
 
 instance (Monad m) => MonadBlockChain (MockChainT m) where
-  validateTxSkel _ skel = do
-    (reqSigs, tx) <- generateTx' skel
-    ctx <- validateTx' reqSigs tx
+  validateTxSkel lparams skel = do
+    tx <- Pl.EmulatorTx <$> generateTx' skel
+    _ <- validateTx lparams tx
     when (autoSlotIncrease $ txOpts skel) $ modify' (\st -> st {mcstCurrentSlot = mcstCurrentSlot st + 1})
-    return ctx
+    return tx
+
+  validateTx = validateTx'
 
   txOutByRef _lparams outref = gets (M.lookup outref . Pl.getIndex . mcstIndex)
 
@@ -307,13 +310,13 @@ runTransactionValidation s lparams ix reqSigs signers tx =
 
 -- | Check 'validateTx' for details; we pass the list of required signatories since
 -- that is only truly available from the unbalanced tx, so we bubble that up all the way here.
-validateTx' :: (Monad m) => [Pl.PaymentPubKeyHash] -> Pl.Tx -> MockChainT m Pl.CardanoTx
-validateTx' reqSigs tx = do
+validateTx' :: (Monad m) => Pl.Params ->  Pl.CardanoTx -> MockChainT m Pl.TxId
+validateTx' lparams tx = do
   s <- currentSlot
   ix <- gets mcstIndex
   ps <- asks mceParams
-  signers <- askSigners
-  let !(ix', ctx, status) = runTransactionValidation s ps ix reqSigs (NE.toList signers) tx
+  let ctx = Em.ValidationCtx ix ps
+      (status, Em.ValidationCtx ix' _) = runState (Em.validateEm s tx) ctx
   case status of
     Just err -> throwError (MCEValidationError err)
     Nothing -> do
@@ -321,17 +324,17 @@ validateTx' reqSigs tx = do
       -- The new mcstIndex is just `ix'`; the new mcstDatums is computed by
       -- removing the datum hashes have been consumed and adding
       -- those that have been created in `tx`.
-      let consumedIns = map Pl.txInputRef $ Pl.txInputs tx ++ Pl.txCollateral tx
-      consumedDHs <- catMaybes <$> mapM (fmap Pl.txOutDatumHash . outFromOutRef ps) consumedIns
+      let consumedIns = map Pl.txInRef $ Pl.getCardanoTxInputs tx ++ Pl.getCardanoTxCollateralInputs tx
+      consumedDHs <- catMaybes <$> mapM (fmap Pl.txOutDatumHash . outFromOutRef lparams) consumedIns
       let consumedDHs' = M.fromList $ zip consumedDHs (repeat ())
       modify'
         ( \st ->
             st
               { mcstIndex = ix',
-                mcstDatums = (mcstDatums st `M.difference` consumedDHs') `M.union` Pl.txData tx
+                mcstDatums = (mcstDatums st `M.difference` consumedDHs') `M.union` Pl.getCardanoTxData tx
               }
         )
-      return ctx
+      return $ Pl.getCardanoTxId tx
 
 -- | Check 'utxosSuchThat' for details
 utxosSuchThat' ::
@@ -386,7 +389,7 @@ myAdjustUnbalTx lparams utx =
     Right (_, res) -> res
 
 -- | Check 'generateTx' for details
-generateTx' :: (Monad m) => TxSkel -> MockChainT m ([Pl.PaymentPubKeyHash], Pl.Tx)
+generateTx' :: (Monad m) => TxSkel -> MockChainT m Pl.Tx
 generateTx' skel@(TxSkel _ _ constraintsSpec) = do
   modify $ updateDatumStr skel
   signers <- askSigners
@@ -402,9 +405,8 @@ generateTx' skel@(TxSkel _ _ constraintsSpec) = do
               else ubtx
       -- optionally apply a transformation before balancing
       let modifiedUbtx = applyRawModOnUnbalancedTx (unsafeModTx opts) reorderedUbtx
-      (reqSigs, balancedTx) <-
-        balanceTxFrom cfg (balanceOutputPolicy opts) (not $ balance opts) (collateral opts) (NE.head signers) (adjust modifiedUbtx)
-      return . (reqSigs,) $
+      (_, balancedTx) <- balanceTxFrom cfg (balanceOutputPolicy opts) (not $ balance opts) (collateral opts) (NE.head signers) (adjust modifiedUbtx)
+      return $
         foldl
           (flip txAddSignature)
           -- optionally apply a transformation to a balanced tx before sending it in.
@@ -423,9 +425,9 @@ generateTx' skel@(TxSkel _ _ constraintsSpec) = do
 
     -- Order outputs according to the order of output constraints
     applyTxOutConstraintOrder :: Pl.Params -> [OutConstraint] -> Pl.UnbalancedTx -> Pl.UnbalancedTx
-    applyTxOutConstraintOrder lparams ocs utx =
+    applyTxOutConstraintOrder lparams' ocs utx =
       let Right tx = Pl.unBalancedTxTx utx
-          txOuts' = orderTxOutputs lparams ocs . Pl.txOutputs $ tx
+          txOuts' = orderTxOutputs lparams' ocs . Pl.txOutputs $ tx
        in utx & Pl.tx . Pl.outputs .~ txOuts'
 
 -- | Sets the 'Pl.txFee' and 'Pl.txValidRange' according to our environment. The transaction
