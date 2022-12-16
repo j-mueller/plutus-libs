@@ -15,8 +15,8 @@ package cardano-crypto-praos
 
 source-repository-package
   type: git
-  location: https://github.com/etiennejf/plutus-apps.git
-  tag: faa90fe151b7dbf76fe81d8893714acfd2aa298e
+  location: https://github.com/j-mueller/plutus-apps.git
+  tag: 1a0580e00994dd826e8ac20c930992ba3ca40060
   subdir:
     freer-extras
     pab-blockfrost

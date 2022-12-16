@@ -134,6 +134,7 @@ data PaysScriptConstraint where
     PaysScriptConstrs a =>
     L.TypedValidator a ->
     L.DatumType a ->
+    Maybe L.StakingCredential ->
     L.Value ->
     PaysScriptConstraint
 
@@ -141,10 +142,10 @@ paysScriptConstraintP :: Prism' OutConstraint PaysScriptConstraint
 paysScriptConstraintP =
   prism'
     ( \case
-        PaysScriptConstraint v d x -> PaysScript v d x
+        PaysScriptConstraint v d s x -> PaysScript v d s x
     )
     ( \case
-        PaysScript v d x -> Just $ PaysScriptConstraint v d x
+        PaysScript v d s x -> Just $ PaysScriptConstraint v d s x
         _ -> Nothing
     )
 
@@ -154,13 +155,13 @@ paysScriptConstraintsT = outConstraintsL % traversed % paysScriptConstraintP
 paysScriptConstraintTypeP ::
   forall a.
   (Typeable a, PaysScriptConstrs a) =>
-  Prism' PaysScriptConstraint (L.TypedValidator a, L.DatumType a, L.Value)
+  Prism' PaysScriptConstraint (L.TypedValidator a, L.DatumType a, Maybe L.StakingCredential, L.Value)
 paysScriptConstraintTypeP =
   prism'
-    (\(v, d, x) -> PaysScriptConstraint v d x)
-    ( \(PaysScriptConstraint v d x) ->
+    (\(v, d, s, x) -> PaysScriptConstraint v d s x)
+    ( \(PaysScriptConstraint v d s x) ->
         case typeOf v `eqTypeRep` typeRep @(L.TypedValidator a) of
-          Just HRefl -> Just (v, d, x)
+          Just HRefl -> Just (v, d, s, x)
           Nothing -> Nothing
     )
 
@@ -211,11 +212,11 @@ instance HasValue OutConstraint where
   valueL =
     lens
       ( \case
-          PaysScript _ _ v -> v
+          PaysScript _ _ _ v -> v
           PaysPKWithDatum _ _ _ v -> v
       )
       ( \c x -> case c of
-          PaysScript v d _ -> PaysScript v d x
+          PaysScript v d s _ -> PaysScript v d s x
           PaysPKWithDatum h sh d _ -> PaysPKWithDatum h sh d x
       )
 
