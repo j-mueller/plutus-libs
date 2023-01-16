@@ -96,6 +96,7 @@ mkProposal reqSigs pmt = do
                      PaysScript
                        (pmultisig params)
                        (Accumulator pmt [])
+                       Nothing
                        (minAda <> paymentValue pmt <> threadToken)
                    ]
           )
@@ -116,7 +117,7 @@ mkSign params pmt sk = do
     validateTxConstrOpts
       def
       (def {adjustUnbalTx = True})
-      [PaysScript (pmultisig params) (Sign pkh sig) mkSignLockedCost]
+      [PaysScript (pmultisig params) (Sign pkh sig) Nothing mkSignLockedCost]
   where
     sig = Pl.sign (Pl.sha2_256 $ packPayment pmt) sk ""
 
@@ -140,6 +141,7 @@ mkCollect thePayment params = signs (wallet 1) $ do
         :=>: [ PaysScript
                  (pmultisig params)
                  (Accumulator thePayment (signPk . snd <$> signatures))
+                 Nothing
                  (paymentValue thePayment <> sOutValue initialProp <> signatureValues)
              ]
 
@@ -355,6 +357,7 @@ mkFakeCollect thePayment params = do
         :=>: [ PaysScript
                  fakeValidator
                  (HJ.Accumulator (trPayment thePayment) (signPk . snd <$> signatures))
+                 Nothing
                  (paymentValue thePayment <> sOutValue initialProp <> signatureValues)
              ]
 

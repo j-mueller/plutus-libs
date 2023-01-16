@@ -342,7 +342,7 @@ utxosSuchThat' ::
   MockChainT m [(SpendableOut, Maybe a)]
 utxosSuchThat' addr datumPred = do
   ix <- gets (Pl.getIndex . mcstIndex)
-  let ix' = M.filter ((== addr) . Pl.txOutAddress) ix
+  let ix' = M.filter ((== Pl.addressCredential addr) . Pl.addressCredential . Pl.txOutAddress) ix
   mapMaybe (fmap assocl . rstr) <$> mapM (\(oref, out) -> (oref,) <$> go oref out) (M.toList ix')
   where
     go :: Pl.TxOutRef -> Pl.TxOut -> MockChainT m (Maybe (Pl.ChainIndexTxOut, Maybe a))
