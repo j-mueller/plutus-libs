@@ -36,6 +36,7 @@ txLock script datum =
       [ PaysScript
           script
           datum
+          Nothing
           (Pl.lovelaceValueOf (Split.amount datum))
       ]
 

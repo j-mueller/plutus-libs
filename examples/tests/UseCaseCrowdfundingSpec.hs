@@ -81,7 +81,7 @@ paysCampaign c w val =
       validateTxConstrOpts
         def
         (def {autoSlotIncrease = False})
-        [PaysScript (typedValidator c) (Ledger.PaymentPubKeyHash (walletPKHash w)) val]
+        [PaysScript (typedValidator c) (Ledger.PaymentPubKeyHash (walletPKHash w)) Nothing val]
 
 -- | Retrieve funds as being the owner
 retrieveFunds :: (MonadMockChain m) => Ledger.POSIXTime -> Campaign -> Wallet -> m ()
