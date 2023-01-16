@@ -70,7 +70,7 @@ payEndpoint amountToPk amountToScript = do
     validateTxSkel def $
       txSkel
         [ paysPK (walletPKHash $ wallet 2) (Pl.lovelaceValueOf amountToPk),
-          PaysScript aValidator ADatum (Pl.lovelaceValueOf amountToScript)
+          PaysScript aValidator ADatum Nothing (Pl.lovelaceValueOf amountToScript)
         ]
   spOuts <- spOutsFromCardanoTx cardanoTx
   -- We return the second (index 1) utxo from the transaction outputs:

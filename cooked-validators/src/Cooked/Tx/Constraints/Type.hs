@@ -170,6 +170,7 @@ data OutConstraint where
     (PaysScriptConstrs a) =>
     Pl.TypedValidator a ->
     Pl.DatumType a ->
+    Maybe Pl.StakingCredential ->
     Pl.Value ->
     OutConstraint
   -- | Creates a UTxO to a specific 'Pl.PubKeyHash' with a potential 'Pl.StakePubKeyHash'.
@@ -188,9 +189,9 @@ data OutConstraint where
 -- NB don't forget to update the Eq instance when adding new constructors
 
 instance Eq OutConstraint where
-  PaysScript s1 d1 v1 == PaysScript s2 d2 v2 =
+  PaysScript s1 d1 st1 v1 == PaysScript s2 d2 st2 v2 =
     case s1 ~*~? s2 of
-      Just HRefl -> (s1, v1) == (s2, v2) && d1 Pl.== d2
+      Just HRefl -> (s1, v1) == (s2, v2) && d1 Pl.== d2  && st1 == st2
       Nothing -> False
   PaysPKWithDatum pk1 stake1 d1 v1 == PaysPKWithDatum pk2 stake2 d2 v2 =
     case d1 ~*~? d2 of

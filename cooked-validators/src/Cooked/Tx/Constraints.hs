@@ -93,7 +93,7 @@ instance ToLedgerConstraint MiscConstraint where
   toLedgerConstraint (SignedBy hashes) = (mempty, foldMap (Pl.mustBeSignedBy . Pl.PaymentPubKeyHash) hashes)
 
 instance ToLedgerConstraint OutConstraint where
-  extractDatumStr (PaysScript _validator datum _value) =
+  extractDatumStr (PaysScript _validator datum _stk _value) =
     M.singleton (PlU.datumHash . Pl.Datum . Pl.toBuiltinData $ datum) (show datum)
   extractDatumStr (PaysPKWithDatum _pk _stak mdat _v) =
     maybe M.empty (\d -> M.singleton (PlU.datumHash . Pl.Datum $ Pl.toBuiltinData d) (show d)) mdat
@@ -107,18 +107,23 @@ instance ToLedgerConstraint OutConstraint where
           -- TODO: do we want to akk ownStakePubKeyHash on 'PaysPKWithDatum'? Would we rather have
           -- a different 'WithOwnStakePubKeyHash' constraint?
           <> maybe mempty Pl.ownStakePubKeyHash stak
-      constr = Pl.singleton $ Pl.MustPayToPubKeyAddress (Pl.PaymentPubKeyHash p) stak (fmap Pl.TxOutDatumInTx mData) Nothing v
-  toLedgerConstraint (PaysScript v datum value) = (lkups, constr)
+      addr = Pl.pubKeyHashAddress (Pl.PaymentPubKeyHash p) stak
+      constr = Pl.singleton $ Pl.MustPayToAddress addr (fmap Pl.TxOutDatumInTx mData) Nothing v
+  toLedgerConstraint (PaysScript v datum stk value) = (lkups, constr)
     where
       lkups = Pl.plutusV1OtherScript (Pl.validatorScript v)
+      addr = Pl.Address (Pl.ScriptCredential (PV1.validatorHash $ Pl.validatorScript v)) stk
       constr =
         -- use of this constraint to properly add entry in datum witness map.
         -- TODO: need to enrich PaysScript constraint to consider only datumHash (datum not added in map),
         -- DatumInTx and InlineDatum
-        Pl.mustPayToOtherScriptWithDatumInTx
-          (PV1.validatorHash $ Pl.validatorScript v)
-          (Pl.Datum $ Pl.toBuiltinData datum)
+        
+        Pl.singleton (Pl.MustPayToAddress
+          addr
+          (Just (Pl.TxOutDatumInTx (Pl.Datum $ Pl.toBuiltinData datum)))
+          Nothing
           value
+        )
 
 instance ToLedgerConstraint Constraints where
   extractDatumStr (miscConstraints :=>: outConstraints) =
@@ -195,14 +200,9 @@ outConstraintToTxOut :: Pl.Params -> OutConstraint -> Pl.TxOut
 outConstraintToTxOut lparams outCstr =
   let (_, lcstr) = toLedgerConstraint outCstr
    in case head $ Pl.txConstraints lcstr of
-        Pl.MustPayToPubKeyAddress pk skhM mdv Nothing v ->
+        Pl.MustPayToAddress addr mdv Nothing v ->
           -- No reference script expected
-          let addr = Pl.pubKeyHashAddress pk skhM
-           in mkTxOut lparams addr v mdv C.ReferenceScriptNone
-        Pl.MustPayToOtherScript vlh svhM dv Nothing v ->
-          -- No reference script expected
-          let addr = Pl.scriptValidatorHashAddress vlh svhM
-           in mkTxOut lparams addr v (Just dv) C.ReferenceScriptNone
+          mkTxOut lparams addr v mdv C.ReferenceScriptNone
         _ -> error "outConstraintToTxOut: unexpected output constraint"
 
 -- | Reorders the outputs of a transaction according to the ordered list of
