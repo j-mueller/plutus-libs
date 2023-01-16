@@ -117,13 +117,14 @@ instance ToLedgerConstraint OutConstraint where
         -- use of this constraint to properly add entry in datum witness map.
         -- TODO: need to enrich PaysScript constraint to consider only datumHash (datum not added in map),
         -- DatumInTx and InlineDatum
-        
-        Pl.singleton (Pl.MustPayToAddress
-          addr
-          (Just (Pl.TxOutDatumInTx (Pl.Datum $ Pl.toBuiltinData datum)))
-          Nothing
-          value
-        )
+
+        Pl.singleton
+          ( Pl.MustPayToAddress
+              addr
+              (Just (Pl.TxOutDatumInTx (Pl.Datum $ Pl.toBuiltinData datum)))
+              Nothing
+              value
+          )
 
 instance ToLedgerConstraint Constraints where
   extractDatumStr (miscConstraints :=>: outConstraints) =
