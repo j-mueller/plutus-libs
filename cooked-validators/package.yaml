@@ -41,7 +41,7 @@ dependencies:
   - QuickCheck
   - cardano-api
   - cardano-crypto
-  - cardano-wallet-core
+  - cardano-wallet
   - memory
   - optics-core
 

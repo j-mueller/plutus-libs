@@ -55,7 +55,7 @@ library
     , bytestring
     , cardano-api
     , cardano-crypto
-    , cardano-wallet-core
+    , cardano-wallet
     , containers
     , data-default
     , deepseq
@@ -119,7 +119,7 @@ test-suite spec
     , bytestring
     , cardano-api
     , cardano-crypto
-    , cardano-wallet-core
+    , cardano-wallet
     , containers
     , cooked-validators
     , data-default
